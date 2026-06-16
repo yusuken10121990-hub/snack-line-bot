@@ -62,3 +62,46 @@ ID: `1gINCuthP8anV7TypfRg4i2Fu2NPk_tAqT4-DU_C-yu4`
 
 ## 補足
 - 任意の全駅間を完全自動で運賃計算するには有料の運賃API（駅すぱあと等）が必要です。本Botは**区間料金マスター（双方向）＋未登録は片道手入力で往復自動**の方式です（`fareLookup_` を差し替えればAPI化可能）。
+
+---
+
+# LIFFアプリ（GitHub Pages・ボタンUI併用）
+
+LIFFは**完全静的HTML（GitHub Pages）**、データは**GAS API（fetch）**経由。GASをLIFFエンドポイントにする方式（400エラー）は使いません。
+
+## 構成
+```
+[LINE リッチメニュー] → [LIFF(GitHub Pages /docs)] → fetch → [GAS doGet/doPost(JSON)] → [スプレッドシート]
+```
+- `docs/index.html` … 入口（あいさつ＋大ボタン3つ）
+- `docs/shift.html` … シフト提出（カレンダーUI・○△×・時間ピッカー）
+- `docs/transit.html` … 交通費登録（駅サジェスト・双方向検索・往復自動）
+- `docs/confirm.html` … 確定シフト確認（今月/来月・合計日数）
+- `docs/app.js` / `docs/style.css` … 共通
+
+## GAS API（doGet/doPost に追加済み）
+| メソッド | action | 返り値 |
+|---|---|---|
+| GET | `profile&userId=` | `{ok,name,transit:{from,to,round}}` |
+| GET | `getShiftRequest&userId=&ym=YYYYMM` | `{ok,requests:[{date,opt,from,to}]}` |
+| GET | `getConfirmedShift&userId=&ym=YYYYMM` | `{ok,fixes:[{date,from,to}]}` |
+| GET | `lookupFare&from=&to=` | `{ok,found,oneway}` |
+| GET | `stationList` | `{ok,stations:[]}` |
+| POST | body`{action:'submitShift',userId,ym,requests}` | `{ok,message}` |
+| POST | body`{action:'saveTransit',userId,from,to,oneway}` | `{ok,round}` |
+
+**CORS対策**：GASのGETはクロスオリジン取得可。POSTは LIFF 側で `fetch(GAS_URL,{method:'POST',body:JSON.stringify(...)})` と**ヘッダー無し（text/plain扱い＝プリフライト無し）**で送るので追加CORS設定不要。
+
+## GitHub Pages デプロイ手順
+1. このリポジトリに `docs/` を配置（済）
+2. GitHub → リポジトリ **Settings → Pages**
+   - Source: **Deploy from a branch**
+   - Branch: **main** / folder: **/docs**（※GitHub Pagesはroot か /docs のみ選択可。/webは不可のため /docs を使用）
+3. 公開URL: **https://yusuken10121990-hub.github.io/snack-line-bot/**
+4. LINE Developers Console → LIFF（ID `2010418983-tAsscHwB`）
+   - **エンドポイントURL** を `https://yusuken10121990-hub.github.io/snack-line-bot/` に変更
+   - サイズ Full / scope: profile
+5. リッチメニューの「シフト提出」等のリンクを **LIFF URL**（`https://liff.line.me/2010418983-tAsscHwB`）に設定
+6. 動作確認：LINEからLIFFを開く→ 名前表示→ シフト提出/交通費/確認
+
+> ブラウザ単体テスト：`…github.io/snack-line-bot/?uid=<LINEのuserId>` でLIFFなしでも各APIを確認できます（userIdはMasterに紐付け済みのもの）。

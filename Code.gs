@@ -81,11 +81,9 @@ function verifySig_(body, signature) {
 function doPost(e) {
   try {
     ensureSheets();
-    var body = e.postData.contents;
-    var sig = (e.parameter && e.parameter['X-Line-Signature']) || '';
-    // 署名はheaderだが、GASのdoPostではheader取得不可のため簡易検証(本番は十分: LINE→GAS直)
-    var data = JSON.parse(body);
-    (data.events || []).forEach(function (ev) {
+    var data = JSON.parse(e.postData.contents);
+    if (data.action) return apiPost_(data);                  // LIFF(GitHub Pages)からのAPI POST
+    (data.events || []).forEach(function (ev) {              // LINE Webhook
       var uid = ev.source && ev.source.userId;
       if (ev.type === 'follow') {
         lineReply(ev.replyToken, 'スナックコレカラへようこそ。\nまずは登録です。\n「名前 田中花子」のように、登録済みのお名前を送ってください。');
@@ -93,8 +91,67 @@ function doPost(e) {
         handleText_(uid, (ev.message.text || '').trim(), ev.replyToken);
       }
     });
-  } catch (err) { Logger.log('doPost ' + err); }
-  return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) { Logger.log('doPost ' + err); return out_({ ok: false, error: String(err) }); }
+  return out_({ ok: true });
+}
+
+/* ====================== LIFF API (GitHub Pages から fetch) ====================== */
+function apiPost_(data) {
+  try {
+    if (data.action === 'submitShift') return out_(apiSubmitShift_(data));
+    if (data.action === 'saveTransit') return out_(apiSaveTransit_(data));
+    return out_({ ok: false, error: 'unknown action' });
+  } catch (err) { return out_({ ok: false, error: String(err) }); }
+}
+function apiProfile_(uid) {
+  var staff = staffByLine_(uid);
+  if (!staff) return { ok: false, needRegister: true };
+  var r = staff.row;
+  return { ok: true, name: r['氏名'], transit: { from: r['出発駅'] || '', to: r['到着駅'] || '', round: Number(r['往復交通費']) || 0 } };
+}
+function apiGetReq_(uid, ym) {
+  var staff = staffByLine_(uid); if (!staff) return { ok: false, needRegister: true, requests: [] };
+  var y = +String(ym).substr(0, 4), m = +String(ym).substr(4, 2);
+  var d = rows_(reqSheet_(y, m), H.REQ);
+  var rows = d.rows.filter(function (r) { return r['氏名'] === staff.row['氏名']; })
+    .map(function (r) { return { date: String(r['日付']), opt: r['区分'], from: String(r['開始'] || ''), to: String(r['終了'] || '') }; });
+  return { ok: true, requests: rows };
+}
+function apiGetFix_(uid, ym) {
+  var staff = staffByLine_(uid); if (!staff) return { ok: false, needRegister: true, fixes: [] };
+  var y = +String(ym).substr(0, 4), m = +String(ym).substr(4, 2);
+  var d = rows_(fixSheet_(y, m), H.FIX);
+  var rows = d.rows.filter(function (r) { return r['氏名'] === staff.row['氏名'] && String(r['状態']) === '確定'; })
+    .map(function (r) { return { date: String(r['日付']), from: String(r['開始'] || ''), to: String(r['終了'] || '') }; });
+  return { ok: true, fixes: rows };
+}
+function apiSubmitShift_(data) {
+  var staff = staffByLine_(data.userId); if (!staff) return { ok: false, needRegister: true, message: '未登録です' };
+  var name = staff.row['氏名']; var y = +String(data.ym).substr(0, 4), m = +String(data.ym).substr(4, 2);
+  var sname = reqSheet_(y, m); var d = rows_(sname, H.REQ);
+  d.rows.filter(function (r) { return r['氏名'] === name; }).map(function (r) { return r._row; }).sort(function (a, b) { return b - a; }).forEach(function (rw) { d.sheet.deleteRow(rw); });
+  (data.requests || []).forEach(function (q) {
+    append_(sname, H.REQ, { '氏名': name, '日付': q.date, '区分': q.opt, '開始': q.from || '', '終了': q.to || '', 'メモ': '', '提出時刻': fmt_(now_(), 'yyyy/MM/dd HH:mm'), 'LINE_ID': data.userId });
+  });
+  return { ok: true, message: m + '月のシフト希望を提出しました（' + (data.requests || []).length + '件）' };
+}
+function apiFare_(from, to) {
+  var ow = fareLookup_(from, to);
+  return { ok: true, found: ow != null, oneway: ow || 0 };
+}
+function apiSaveTransit_(data) {
+  var staff = staffByLine_(data.userId); if (!staff) return { ok: false, needRegister: true };
+  var ow = parseInt(data.oneway, 10) || 0;
+  if (data.from && data.to) fareSave_(data.from, data.to, ow);
+  staff.sheet.getRange(staff.row._row, 6).setValue(data.from || '');
+  staff.sheet.getRange(staff.row._row, 7).setValue(data.to || '');
+  staff.sheet.getRange(staff.row._row, 8).setValue(ow * 2);
+  return { ok: true, message: '登録しました', round: ow * 2 };
+}
+function apiStations_() {
+  var d = rows_(SH.FARE, H['区間料金']); var set = {};
+  d.rows.forEach(function (r) { if (r['駅A']) set[r['駅A']] = 1; if (r['駅B']) set[r['駅B']] = 1; });
+  return { ok: true, stations: Object.keys(set) };
 }
 
 /* ====================== コマンド振り分け ====================== */
@@ -354,6 +411,14 @@ function confirmMonthToCalendar(y, m) {
 function doGet(e) {
   ensureSheets();
   var a = e && e.parameter && e.parameter.action;
+  var pr = e.parameter || {};
+  // --- LIFF GET API ---
+  if (a === 'profile') return out_(apiProfile_(pr.userId));
+  if (a === 'getShiftRequest') return out_(apiGetReq_(pr.userId, pr.ym));
+  if (a === 'getConfirmedShift') return out_(apiGetFix_(pr.userId, pr.ym));
+  if (a === 'lookupFare') return out_(apiFare_(pr.from, pr.to));
+  if (a === 'stationList') return out_(apiStations_());
+  // --- 管理アクション ---
   if (a === 'confirm') {
     if ((e.parameter.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' });
     var p = (e.parameter.ym || '').match(/(\d{4})(\d{2})/);

@@ -1,0 +1,35 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>シフト確認</title><link rel="stylesheet" href="style.css">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script></head><body>
+<header>🗓️ 確定シフト確認</header>
+<div class="wrap">
+  <div class="tabs"><div class="tab on" id="t0" onclick="setMonth(0)">今月</div><div class="tab" id="t1" onclick="setMonth(1)">来月</div></div>
+  <div class="card" id="summary">読み込み中…</div>
+  <div id="list"></div>
+  <button class="act gray" onclick="closeWin()" style="margin-top:10px">閉じる</button>
+</div>
+<div id="spin"><div class="sp"></div></div>
+<script src="app.js"></script>
+<script>
+var OFFSET=0;
+var WD=['日','月','火','水','木','金','土'];
+function setMonth(o){OFFSET=o;$('t0').classList.toggle('on',o===0);$('t1').classList.toggle('on',o===1);load();}
+function load(){
+  var c=monthOf(OFFSET);spin(true);
+  apiGet('getConfirmedShift',{userId:ME.userId,ym:c.ym}).then(function(r){
+    spin(false);
+    var fx=(r.fixes||[]);
+    $('summary').innerHTML='<b>'+c.y+'年'+c.m+'月</b>　確定 <b style="color:#d6336c">'+fx.length+'</b> 日';
+    if(!r.ok && r.needRegister){$('summary').innerHTML='未登録です。LINEトークで「名前 ○○○○」を送って登録してください。';$('list').innerHTML='';return;}
+    if(!fx.length){$('list').innerHTML='<div class="card s">確定シフトはまだありません。</div>';return;}
+    fx.sort(function(a,b){return new Date(a.date.replace(/-/g,'/'))-new Date(b.date.replace(/-/g,'/'));});
+    $('list').innerHTML='<div class="card">'+fx.map(function(x){
+      var d=new Date(x.date.replace(/-/g,'/'));var lbl=(d.getMonth()+1)+'/'+d.getDate()+' ('+WD[d.getDay()]+')';
+      return '<div class="list-row"><span>'+lbl+'</span><span><b>'+(x.from||'')+'〜'+(x.to||'')+'</b></span></div>';
+    }).join('')+'</div>';
+  }).catch(function(){spin(false);$('summary').textContent='通信エラー';});
+}
+initLiff().then(function(){ load(); });
+</script>
+</body></html>

@@ -1,0 +1,74 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>シフト提出</title><link rel="stylesheet" href="style.css">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script></head><body>
+<header>📅 シフト提出</header>
+<div class="wrap">
+  <div class="tabs"><div class="tab on" id="t0" onclick="setMonth(0)">今月</div><div class="tab" id="t1" onclick="setMonth(1)">来月</div></div>
+  <div class="s" id="mlabel"></div>
+  <div class="card"><div class="cal" id="cal"></div>
+    <div class="s" style="margin-top:8px">○出勤 / △調整可 / ×休み（日付をタップして選択）</div></div>
+</div>
+<div class="foot"><button class="act" onclick="submit()">📤 提出する</button></div>
+
+<div class="modal" id="modal"><div class="mbox">
+  <div id="mday" style="font-weight:bold;margin-bottom:8px"></div>
+  <div class="timerow"><span>時間</span>
+    <select id="tf"></select><span>〜</span><select id="tt"></select></div>
+  <button class="opt work" onclick="pick('⏰')">○ 出勤（上の時間で）</button>
+  <button class="opt adj" onclick="pick('△')">△ 調整可</button>
+  <button class="opt off" onclick="pick('×')">× 休み</button>
+  <button class="opt clear" onclick="pick('')">― クリア</button>
+  <button class="act gray" style="margin-top:6px" onclick="closeModal()">キャンセル</button>
+</div></div>
+<div id="spin"><div class="sp"></div></div>
+<script src="app.js"></script>
+<script>
+var OFFSET=0, CUR=monthOf(0), SH={}, SELDATE=null;
+function setMonth(o){OFFSET=o;$('t0').classList.toggle('on',o===0);$('t1').classList.toggle('on',o===1);load();}
+function timeOpts(){var a=[];for(var h=18;h<=29;h++){var hh=h>=24?h-24:h;a.push(('0'+hh).slice(-2)+':00');a.push(('0'+hh).slice(-2)+':30');}return a;}
+function fillTimes(){var o=timeOpts();$('tf').innerHTML=o.map(function(t){return '<option'+(t==='20:00'?' selected':'')+'>'+t+'</option>';}).join('');$('tt').innerHTML=o.map(function(t){return '<option'+(t==='02:00'?' selected':'')+'>'+t+'</option>';}).join('');}
+function load(){
+  CUR=monthOf(OFFSET);$('mlabel').textContent=CUR.y+'年'+CUR.m+'月';SH={};spin(true);
+  apiGet('getShiftRequest',{userId:ME.userId,ym:CUR.ym}).then(function(r){
+    (r.requests||[]).forEach(function(q){SH[q.date]={opt:q.opt,from:q.from,to:q.to};});
+    render();spin(false);
+  }).catch(function(){spin(false);render();});
+}
+function render(){
+  var last=new Date(CUR.y,CUR.m,0).getDate();var first=new Date(CUR.y,CUR.m-1,1).getDay();
+  var h='';['日','月','火','水','木','金','土'].forEach(function(w){h+='<div class="h">'+w+'</div>';});
+  for(var i=0;i<first;i++)h+='<div class="d empty"></div>';
+  for(var d=1;d<=last;d++){
+    var key=CUR.y+'/'+CUR.m+'/'+d;var st=SH[key];var cls='d',mk='';
+    var dow=new Date(CUR.y,CUR.m-1,d).getDay();
+    if(st&&st.opt==='⏰'){cls+=' work';mk='○'+(st.from?('<br>'+st.from.slice(0,5)):'');}
+    else if(st&&st.opt==='△'){cls+=' adj';mk='△';}
+    else if(st&&st.opt==='×'){cls+=' off';mk='×';}
+    var col=dow===0?' sun':(dow===6?' sat':'');
+    h+='<div class="'+cls+'" onclick="openDay('+d+')"><span class="'+col.trim()+'">'+d+'</span><span class="mk">'+mk+'</span></div>';
+  }
+  $('cal').innerHTML=h;
+}
+function openDay(d){SELDATE=CUR.y+'/'+CUR.m+'/'+d;$('mday').textContent=CUR.m+'月'+d+'日';var st=SH[SELDATE];if(st&&st.from){$('tf').value=st.from.slice(0,5);$('tt').value=st.to.slice(0,5);}$('modal').classList.add('on');}
+function closeModal(){$('modal').classList.remove('on');}
+function pick(opt){
+  if(!opt){delete SH[SELDATE];}
+  else if(opt==='⏰'){SH[SELDATE]={opt:'⏰',from:$('tf').value,to:$('tt').value};}
+  else{SH[SELDATE]={opt:opt,from:'',to:''};}
+  closeModal();render();
+}
+function submit(){
+  var reqs=Object.keys(SH).map(function(k){return {date:k,opt:SH[k].opt,from:SH[k].from||'',to:SH[k].to||''};});
+  if(!reqs.length){toast('1日以上選択してください');return;}
+  spin(true);
+  apiPost({action:'submitShift',userId:ME.userId,ym:CUR.ym,requests:reqs}).then(function(r){
+    spin(false);
+    if(r.ok){toast('✅ '+(r.message||'提出しました'));setTimeout(closeWin,1500);}
+    else toast(r.message||'提出できませんでした（未登録の場合はBotで氏名を登録）');
+  }).catch(function(){spin(false);toast('通信エラー');});
+}
+fillTimes();
+initLiff().then(function(){ load(); });
+</script>
+</body></html>

@@ -1,0 +1,57 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>交通費登録</title><link rel="stylesheet" href="style.css">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script></head><body>
+<header>🚃 交通費登録</header>
+<div class="wrap">
+  <div class="card" id="cur">現在の登録を読み込み中…</div>
+  <div class="card">
+    <div class="s">区間を入力すると料金表(双方向)を自動検索します</div>
+    <input id="from" list="stations" placeholder="出発駅（自宅最寄り）">
+    <input id="to" list="stations" placeholder="到着駅（お店の最寄り）" value="新宿">
+    <datalist id="stations"></datalist>
+    <div id="fareres" class="s" style="margin:6px 0;min-height:20px"></div>
+    <input id="oneway" type="number" inputmode="numeric" placeholder="片道運賃（円）※未登録区間のとき入力" style="display:none">
+    <button class="act" onclick="save()">✅ 登録する</button>
+  </div>
+  <button class="act gray" onclick="closeWin()">閉じる</button>
+</div>
+<div id="spin"><div class="sp"></div></div>
+<script src="app.js"></script>
+<script>
+var FOUND=null; // 片道運賃(見つかった場合)
+function showCur(t){ $('cur').innerHTML = (t&&t.from)? ('現在の登録区間：<b>'+t.from+'⇄'+t.to+'</b>　往復 ¥'+(t.round||0).toLocaleString()+' / 日') : '現在：交通費は未登録です'; }
+function loadStations(){ apiGet('stationList',{}).then(function(r){ $('stations').innerHTML=(r.stations||[]).map(function(s){return '<option value="'+s+'">';}).join(''); }); }
+function lookup(){
+  var f=$('from').value.trim(), t=$('to').value.trim();
+  if(!f||!t){$('fareres').textContent='';return;}
+  apiGet('lookupFare',{from:f,to:t}).then(function(r){
+    if(r.found){FOUND=r.oneway;$('oneway').style.display='none';$('fareres').innerHTML='区間「'+f+'⇄'+t+'」 片道¥'+r.oneway.toLocaleString()+' → <b style="color:#d6336c">往復 ¥'+(r.oneway*2).toLocaleString()+' / 日</b>';}
+    else{FOUND=null;$('oneway').style.display='block';$('fareres').textContent='この区間は未登録です。片道運賃を入力してください（自動で往復計算）。';}
+  });
+}
+function save(){
+  var f=$('from').value.trim(), t=$('to').value.trim();
+  if(!f||!t){toast('出発駅・到着駅を入力してください');return;}
+  var ow = (FOUND!=null)? FOUND : parseInt($('oneway').value||'0',10);
+  if(!ow){toast('片道運賃を入力してください');return;}
+  spin(true);
+  apiPost({action:'saveTransit',userId:ME.userId,from:f,to:t,oneway:ow}).then(function(r){
+    spin(false);
+    if(r.ok){toast('✅ 登録しました（往復¥'+(ow*2).toLocaleString()+'/日）');showCur({from:f,to:t,round:ow*2});setTimeout(closeWin,1500);}
+    else toast(r.message||'登録できませんでした（未登録の場合はBotで氏名を登録）');
+  }).catch(function(){spin(false);toast('通信エラー');});
+}
+$('from').addEventListener('change',lookup);$('to').addEventListener('change',lookup);
+$('from').addEventListener('blur',lookup);$('to').addEventListener('blur',lookup);
+loadStations();
+initLiff().then(function(){
+  spin(true);
+  apiGet('profile',{userId:ME.userId}).then(function(r){
+    spin(false);
+    if(r.ok){showCur(r.transit||{});if(r.transit&&r.transit.from)$('from').value=r.transit.from;if(r.transit&&r.transit.to)$('to').value=r.transit.to;}
+    else $('cur').innerHTML='未登録です。先にLINEトークで「名前 ○○○○」を送って登録してください。';
+  }).catch(function(){spin(false);});
+});
+</script>
+</body></html>
