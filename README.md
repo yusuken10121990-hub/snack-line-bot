@@ -77,7 +77,13 @@ LIFFは**完全静的HTML（GitHub Pages）**、データは**GAS API（fetch）
 - `docs/shift.html` … シフト提出（カレンダーUI・○△×・時間ピッカー）
 - `docs/transit.html` … 交通費登録（駅サジェスト・双方向検索・往復自動）
 - `docs/confirm.html` … 確定シフト確認（今月/来月・合計日数）
+- `docs/admin.html` … **管理用シフト一覧**（提出された希望を 日付順/スタッフ順 で表示・管理キー保護）
 - `docs/app.js` / `docs/style.css` … 共通
+
+### 管理シフト一覧
+- URL: `https://yusuken10121990-hub.github.io/snack-line-bot/admin.html`
+- 初回に**管理キー**（GASの `ADMIN_KEY`・既定 `korekara2026`）を入力 → 当月/来月の提出を、**日付ごと（誰が何時〜何時）/ スタッフごと**に一覧表示。
+- データ元はLIFF/LINE提出と同じ `シフト希望_YYYYMM` シート（GAS API `adminShifts`）。
 
 ## GAS API（doGet/doPost に追加済み）
 | メソッド | action | 返り値 |

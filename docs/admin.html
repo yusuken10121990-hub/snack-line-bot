@@ -1,0 +1,69 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>シフト一覧（管理）</title><link rel="stylesheet" href="style.css"></head><body>
+<header>🗂️ シフト提出一覧（管理）</header>
+<div class="wrap">
+  <div class="card" id="keybox" style="display:none">
+    <div class="s">管理キーを入力してください</div>
+    <input id="key" type="password" placeholder="管理キー">
+    <button class="act" onclick="saveKey()">表示する</button>
+  </div>
+  <div id="main" style="display:none">
+    <div class="tabs"><div class="tab on" id="t0" onclick="setMonth(0)">今月</div><div class="tab" id="t1" onclick="setMonth(1)">来月</div></div>
+    <div class="card" id="summary">読み込み中…</div>
+    <div class="tabs" style="margin-top:0"><div class="tab on" id="vb" onclick="setView('date')">日付順</div><div class="tab" id="vn" onclick="setView('name')">スタッフ順</div></div>
+    <div id="list"></div>
+    <button class="act gray" style="margin-top:10px" onclick="logoutKey()">管理キーを変更</button>
+  </div>
+</div>
+<div id="spin"><div class="sp"></div></div>
+<script src="app.js"></script>
+<script>
+var OFFSET=0, VIEW='date', DATA=null;
+var WD=['日','月','火','水','木','金','土'];
+var OPT={'⏰':'出勤','○':'出勤','△':'調整可','×':'休み'};
+function key(){return localStorage.getItem('kk_admin_key')||'';}
+function saveKey(){var k=$('key').value.trim();if(!k){return;}localStorage.setItem('kk_admin_key',k);show();}
+function logoutKey(){localStorage.removeItem('kk_admin_key');show();}
+function setMonth(o){OFFSET=o;$('t0').classList.toggle('on',o===0);$('t1').classList.toggle('on',o===1);load();}
+function setView(v){VIEW=v;$('vb').classList.toggle('on',v==='date');$('vn').classList.toggle('on',v==='name');render();}
+function show(){
+  if(!key()){$('keybox').style.display='block';$('main').style.display='none';return;}
+  $('keybox').style.display='none';$('main').style.display='block';load();
+}
+function load(){
+  var c=monthOf(OFFSET);spin(true);
+  apiGet('adminShifts',{ym:c.ym,key:key()}).then(function(r){
+    spin(false);
+    if(!r.ok){ if(r.error==='bad key'){toast('管理キーが違います');logoutKey();} else toast('取得エラー'); return; }
+    DATA=r;$('summary').innerHTML='<b>'+r.year+'年'+r.month+'月</b>　提出 <b style="color:#d6336c">'+r.staffCount+'</b>名 / 延べ <b>'+r.count+'</b>件';
+    render();
+  }).catch(function(){spin(false);toast('通信エラー（GAS未更新の可能性）');});
+}
+function fmtDay(dstr){var d=new Date(dstr.replace(/-/g,'/'));return (d.getMonth()+1)+'/'+d.getDate()+'('+WD[d.getDay()]+')';}
+function timeLabel(r){ if(r.opt==='×') return '休み'; if(r.opt==='△') return '調整可'; return (r.from||'')+'〜'+(r.to||''); }
+function render(){
+  if(!DATA){return;}
+  var reqs=DATA.requests||[];
+  if(!reqs.length){$('list').innerHTML='<div class="card s">この月の提出はまだありません。</div>';return;}
+  var h='';
+  if(VIEW==='date'){
+    var byd={};reqs.forEach(function(r){(byd[r.date]=byd[r.date]||[]).push(r);});
+    Object.keys(byd).sort(function(a,b){return new Date(a.replace(/-/g,'/'))-new Date(b.replace(/-/g,'/'));}).forEach(function(dt){
+      var work=byd[dt].filter(function(r){return r.opt!=='×';});
+      h+='<div class="card"><div style="font-weight:bold;color:#d6336c;margin-bottom:4px">'+fmtDay(dt)+' <span class="s">（出勤系'+work.length+'名）</span></div>'+
+        byd[dt].map(function(r){return '<div class="list-row"><span>'+r.name+'</span><span><b>'+timeLabel(r)+'</b></span></div>';}).join('')+'</div>';
+    });
+  }else{
+    var byn={};reqs.forEach(function(r){(byn[r.name]=byn[r.name]||[]).push(r);});
+    Object.keys(byn).forEach(function(nm){
+      byn[nm].sort(function(a,b){return new Date(a.date.replace(/-/g,'/'))-new Date(b.date.replace(/-/g,'/'));});
+      h+='<div class="card"><div style="font-weight:bold;color:#d6336c;margin-bottom:4px">'+nm+' <span class="s">（'+byn[nm].length+'件）</span></div>'+
+        byn[nm].map(function(r){return '<div class="list-row"><span>'+fmtDay(r.date)+'</span><span><b>'+timeLabel(r)+'</b></span></div>';}).join('')+'</div>';
+    });
+  }
+  $('list').innerHTML=h;
+}
+show();
+</script>
+</body></html>

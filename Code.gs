@@ -153,6 +153,16 @@ function apiStations_() {
   d.rows.forEach(function (r) { if (r['駅A']) set[r['駅A']] = 1; if (r['駅B']) set[r['駅B']] = 1; });
   return { ok: true, stations: Object.keys(set) };
 }
+function apiAdminShifts_(ym) {
+  var t = ym_(); ym = ym || (t.y + ('0' + t.m).slice(-2));
+  var y = +String(ym).substr(0, 4), m = +String(ym).substr(4, 2);
+  var d = rows_(reqSheet_(y, m), H.REQ);
+  var requests = d.rows.map(function (r) {
+    return { name: r['氏名'], date: String(r['日付']), opt: r['区分'], from: String(r['開始'] || ''), to: String(r['終了'] || ''), submitted: String(r['提出時刻'] || '') };
+  });
+  var names = {}; requests.forEach(function (r) { names[r.name] = 1; });
+  return { ok: true, ym: ym, year: y, month: m, count: requests.length, staffCount: Object.keys(names).length, requests: requests };
+}
 
 /* ====================== コマンド振り分け ====================== */
 function handleText_(uid, text, reply) {
@@ -418,6 +428,7 @@ function doGet(e) {
   if (a === 'getConfirmedShift') return out_(apiGetFix_(pr.userId, pr.ym));
   if (a === 'lookupFare') return out_(apiFare_(pr.from, pr.to));
   if (a === 'stationList') return out_(apiStations_());
+  if (a === 'adminShifts') { if ((pr.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' }); return out_(apiAdminShifts_(pr.ym)); }
   // --- 管理アクション ---
   if (a === 'confirm') {
     if ((e.parameter.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' });
