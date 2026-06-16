@@ -40,3 +40,13 @@ input,select{width:100%;padding:12px;font-size:16px;border:1px solid #ccc;border
 .tabs{display:flex;gap:8px;margin-bottom:10px}
 .tab{flex:1;text-align:center;padding:10px;border-radius:10px;background:#fff;border:1px solid #eee;font-weight:bold}
 .tab.on{background:#d6336c;color:#fff;border:0}
+/* 管理カレンダー */
+.mcal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.mcal .h{text-align:center;font-size:11px;color:#888;padding:3px 0}
+.mcal .c{min-height:70px;border:1px solid #eee;border-radius:6px;background:#fff;padding:3px;font-size:10px;overflow:hidden}
+.mcal .c.empty{border:0;background:transparent}
+.mcal .c .dn{font-weight:bold;font-size:11px}
+.mcal .c .sun{color:#dc2626}.mcal .c .sat{color:#2563eb}
+.mcal .e{background:#e8f5e9;border-radius:4px;padding:1px 3px;margin-top:2px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcal .e.adj{background:#fff8e1}
+.mcal .c .more{color:#888}

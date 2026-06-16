@@ -77,7 +77,7 @@ LIFFは**完全静的HTML（GitHub Pages）**、データは**GAS API（fetch）
 - `docs/shift.html` … シフト提出（カレンダーUI・○△×・時間ピッカー）
 - `docs/transit.html` … 交通費登録（駅サジェスト・双方向検索・往復自動）
 - `docs/confirm.html` … 確定シフト確認（今月/来月・合計日数）
-- `docs/admin.html` … **管理用シフト一覧**（提出された希望を 日付順/スタッフ順 で表示・管理キー保護）
+- `docs/admin.html` … **管理用シフトカレンダー**（1ヶ月カレンダーに「氏名 何時〜何時」表示・管理キー保護・**ワンクリックでGoogleカレンダー連携＋全員LINE通知**）
 - `docs/app.js` / `docs/style.css` … 共通
 
 ### 管理シフト一覧

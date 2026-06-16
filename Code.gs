@@ -417,6 +417,21 @@ function confirmMonthToCalendar(y, m) {
   return { calendar: made, notified: notified };
 }
 
+/* 提出された希望(出勤系)を確定にして、カレンダー作成+個別LINE通知まで一括実行 */
+function confirmRequestsAndSync_(ym) {
+  var t = ym_(); ym = ym || (t.y + ('0' + t.m).slice(-2));
+  var y = +String(ym).substr(0, 4), m = +String(ym).substr(4, 2);
+  var req = rows_(reqSheet_(y, m), H.REQ);
+  var work = req.rows.filter(function (r) { return r['区分'] === '⏰' || r['区分'] === '○'; });
+  var sname = fixSheet_(y, m); var fx = rows_(sname, H.FIX);
+  for (var i = fx.rows.length - 1; i >= 0; i--) fx.sheet.deleteRow(fx.rows[i]._row);   // 当月確定をクリア
+  work.forEach(function (r) {
+    append_(sname, H.FIX, { '氏名': r['氏名'], '日付': r['日付'], '開始': r['開始'] || STANDARD_FROM, '終了': r['終了'] || STANDARD_TO, '状態': '確定' });
+  });
+  var res = confirmMonthToCalendar(y, m);
+  return { ok: true, confirmed: work.length, calendar: res.calendar, notified: res.notified };
+}
+
 /* ====================== doGet(動作確認 / 管理アクション) ====================== */
 function doGet(e) {
   ensureSheets();
@@ -429,6 +444,7 @@ function doGet(e) {
   if (a === 'lookupFare') return out_(apiFare_(pr.from, pr.to));
   if (a === 'stationList') return out_(apiStations_());
   if (a === 'adminShifts') { if ((pr.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' }); return out_(apiAdminShifts_(pr.ym)); }
+  if (a === 'confirmFromRequests') { if ((pr.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' }); return out_(confirmRequestsAndSync_(pr.ym)); }
   // --- 管理アクション ---
   if (a === 'confirm') {
     if ((e.parameter.key || '') !== prop('ADMIN_KEY', 'korekara2026')) return out_({ ok: false, error: 'bad key' });

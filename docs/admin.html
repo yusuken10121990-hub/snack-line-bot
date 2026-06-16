@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>シフト一覧（管理）</title><link rel="stylesheet" href="style.css"></head><body>
-<header>🗂️ シフト提出一覧（管理）</header>
+<title>シフト管理カレンダー</title><link rel="stylesheet" href="style.css"></head><body>
+<header>🗓️ シフト管理カレンダー</header>
 <div class="wrap">
   <div class="card" id="keybox" style="display:none">
     <div class="s">管理キーを入力してください</div>
@@ -11,58 +11,65 @@
   <div id="main" style="display:none">
     <div class="tabs"><div class="tab on" id="t0" onclick="setMonth(0)">今月</div><div class="tab" id="t1" onclick="setMonth(1)">来月</div></div>
     <div class="card" id="summary">読み込み中…</div>
-    <div class="tabs" style="margin-top:0"><div class="tab on" id="vb" onclick="setView('date')">日付順</div><div class="tab" id="vn" onclick="setView('name')">スタッフ順</div></div>
-    <div id="list"></div>
+    <div class="card"><div class="mcal" id="cal"></div>
+      <div class="s" style="margin-top:8px">🟩 出勤（時間）／🟨 調整可。各セルに「氏名 時間」を表示。</div></div>
+    <button class="act" onclick="syncCal()">🗓️ Googleカレンダーに連携（確定＋全員にLINE通知）</button>
+    <div id="res" class="s" style="margin-top:8px"></div>
     <button class="act gray" style="margin-top:10px" onclick="logoutKey()">管理キーを変更</button>
   </div>
 </div>
 <div id="spin"><div class="sp"></div></div>
 <script src="app.js"></script>
 <script>
-var OFFSET=0, VIEW='date', DATA=null;
+var OFFSET=0, DATA=null;
 var WD=['日','月','火','水','木','金','土'];
-var OPT={'⏰':'出勤','○':'出勤','△':'調整可','×':'休み'};
 function key(){return localStorage.getItem('kk_admin_key')||'';}
-function saveKey(){var k=$('key').value.trim();if(!k){return;}localStorage.setItem('kk_admin_key',k);show();}
+function saveKey(){var k=$('key').value.trim();if(!k)return;localStorage.setItem('kk_admin_key',k);show();}
 function logoutKey(){localStorage.removeItem('kk_admin_key');show();}
 function setMonth(o){OFFSET=o;$('t0').classList.toggle('on',o===0);$('t1').classList.toggle('on',o===1);load();}
-function setView(v){VIEW=v;$('vb').classList.toggle('on',v==='date');$('vn').classList.toggle('on',v==='name');render();}
-function show(){
-  if(!key()){$('keybox').style.display='block';$('main').style.display='none';return;}
-  $('keybox').style.display='none';$('main').style.display='block';load();
-}
+function show(){ if(!key()){$('keybox').style.display='block';$('main').style.display='none';return;} $('keybox').style.display='none';$('main').style.display='block';load(); }
 function load(){
-  var c=monthOf(OFFSET);spin(true);
+  var c=monthOf(OFFSET);spin(true);$('res').textContent='';
   apiGet('adminShifts',{ym:c.ym,key:key()}).then(function(r){
     spin(false);
-    if(!r.ok){ if(r.error==='bad key'){toast('管理キーが違います');logoutKey();} else toast('取得エラー'); return; }
-    DATA=r;$('summary').innerHTML='<b>'+r.year+'年'+r.month+'月</b>　提出 <b style="color:#d6336c">'+r.staffCount+'</b>名 / 延べ <b>'+r.count+'</b>件';
+    if(!r.ok){ if(r.error==='bad key'){toast('管理キーが違います');logoutKey();} else toast('取得エラー（GAS未更新?）'); return; }
+    DATA={c:c, reqs:r.requests||[]};
+    $('summary').innerHTML='<b>'+c.y+'年'+c.m+'月</b>　提出 <b style="color:#d6336c">'+r.staffCount+'</b>名 / 延べ '+r.count+'件';
     render();
   }).catch(function(){spin(false);toast('通信エラー（GAS未更新の可能性）');});
 }
-function fmtDay(dstr){var d=new Date(dstr.replace(/-/g,'/'));return (d.getMonth()+1)+'/'+d.getDate()+'('+WD[d.getDay()]+')';}
-function timeLabel(r){ if(r.opt==='×') return '休み'; if(r.opt==='△') return '調整可'; return (r.from||'')+'〜'+(r.to||''); }
 function render(){
-  if(!DATA){return;}
-  var reqs=DATA.requests||[];
-  if(!reqs.length){$('list').innerHTML='<div class="card s">この月の提出はまだありません。</div>';return;}
+  var c=DATA.c; var byd={};
+  (DATA.reqs||[]).forEach(function(r){
+    if(r.opt==='×') return; // 休みはカレンダーに出さない
+    var d=new Date(r.date.replace(/-/g,'/')); var k=d.getDate();
+    (byd[k]=byd[k]||[]).push(r);
+  });
+  var last=new Date(c.y,c.m,0).getDate(); var first=new Date(c.y,c.m-1,1).getDay();
   var h='';
-  if(VIEW==='date'){
-    var byd={};reqs.forEach(function(r){(byd[r.date]=byd[r.date]||[]).push(r);});
-    Object.keys(byd).sort(function(a,b){return new Date(a.replace(/-/g,'/'))-new Date(b.replace(/-/g,'/'));}).forEach(function(dt){
-      var work=byd[dt].filter(function(r){return r.opt!=='×';});
-      h+='<div class="card"><div style="font-weight:bold;color:#d6336c;margin-bottom:4px">'+fmtDay(dt)+' <span class="s">（出勤系'+work.length+'名）</span></div>'+
-        byd[dt].map(function(r){return '<div class="list-row"><span>'+r.name+'</span><span><b>'+timeLabel(r)+'</b></span></div>';}).join('')+'</div>';
+  WD.forEach(function(w){h+='<div class="h">'+w+'</div>';});
+  for(var i=0;i<first;i++)h+='<div class="c empty"></div>';
+  for(var dd=1;dd<=last;dd++){
+    var dow=new Date(c.y,c.m-1,dd).getDay(); var col=dow===0?'sun':(dow===6?'sat':'');
+    var list=byd[dd]||[]; var ev='';
+    list.slice(0,4).forEach(function(r){
+      var t=(r.opt==='△')?'△':((r.from||'').slice(0,5)+'-'+(r.to||'').slice(0,5));
+      ev+='<div class="e'+(r.opt==='△'?' adj':'')+'">'+r.name+' '+t+'</div>';
     });
-  }else{
-    var byn={};reqs.forEach(function(r){(byn[r.name]=byn[r.name]||[]).push(r);});
-    Object.keys(byn).forEach(function(nm){
-      byn[nm].sort(function(a,b){return new Date(a.date.replace(/-/g,'/'))-new Date(b.date.replace(/-/g,'/'));});
-      h+='<div class="card"><div style="font-weight:bold;color:#d6336c;margin-bottom:4px">'+nm+' <span class="s">（'+byn[nm].length+'件）</span></div>'+
-        byn[nm].map(function(r){return '<div class="list-row"><span>'+fmtDay(r.date)+'</span><span><b>'+timeLabel(r)+'</b></span></div>';}).join('')+'</div>';
-    });
+    if(list.length>4) ev+='<div class="more">+'+(list.length-4)+'名</div>';
+    h+='<div class="c"><div class="dn '+col+'">'+dd+'</div>'+ev+'</div>';
   }
-  $('list').innerHTML=h;
+  $('cal').innerHTML=h;
+}
+function syncCal(){
+  if(!confirm('提出された出勤希望を「確定」にして、Googleカレンダー作成＋対象スタッフ全員にLINE通知します。よろしいですか？'))return;
+  spin(true);
+  apiGet('confirmFromRequests',{ym:DATA.c.ym,key:key()}).then(function(r){
+    spin(false);
+    if(!r.ok){toast(r.error==='bad key'?'管理キーが違います':'連携エラー');return;}
+    $('res').innerHTML='✅ 確定 '+r.confirmed+'件 ／ カレンダー作成 '+r.calendar+'件 ／ LINE通知 '+r.notified+'名'+(r.calendar===0?'<br><span style="color:#dc2626">※カレンダー作成0：GASのCALENDAR_ID未設定の可能性</span>':'');
+    toast('連携しました');
+  }).catch(function(){spin(false);toast('通信エラー');});
 }
 show();
 </script>
