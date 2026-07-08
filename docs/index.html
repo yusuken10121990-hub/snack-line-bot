@@ -13,12 +13,21 @@
 <div id="spin"><div class="sp"></div></div>
 <script src="app.js"></script>
 <script>
-initLiff().then(function(me){
-  $('hello').textContent = (me.displayName || '') + ' さん、こんにちは🌸';
+function carryUid(me){
   // userIdを各ページへ引き継ぎ(LIFF外テスト用)。LIFF内では各ページが再取得するので無くてもOK。
   if(!(typeof liff!=='undefined' && liff.isInClient()) && me.userId){
     document.querySelectorAll('.bigbtn').forEach(function(a){ a.href += '?uid='+encodeURIComponent(me.userId)+'&name='+encodeURIComponent(me.displayName||''); });
   }
+}
+initLiff().then(function(me){
+  liffGet('/api/liff/me',{userId:me.userId}).then(function(r){
+    $('hello').textContent = r.ok ? ((r.name||me.displayName||'')+' さん、こんにちは🌸')
+      : '未登録です。LINEトークで自分のフルネームを送って登録してください。';
+    carryUid(me);
+  }).catch(function(){
+    $('hello').textContent = (me.displayName || '') + ' さん、こんにちは🌸';
+    carryUid(me);
+  });
 });
 </script>
 </body></html>

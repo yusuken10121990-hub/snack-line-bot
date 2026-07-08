@@ -21,11 +21,11 @@
 <script>
 var FOUND=null; // 片道運賃(見つかった場合)
 function showCur(t){ $('cur').innerHTML = (t&&t.from)? ('現在の登録区間：<b>'+t.from+'⇄'+t.to+'</b>　往復 ¥'+(t.round||0).toLocaleString()+' / 日') : '現在：交通費は未登録です'; }
-function loadStations(){ apiGet('stationList',{}).then(function(r){ $('stations').innerHTML=(r.stations||[]).map(function(s){return '<option value="'+s+'">';}).join(''); }); }
+function loadStations(){ liffGet('/api/liff/stations',{}).then(function(r){ $('stations').innerHTML=(r.stations||[]).map(function(s){return '<option value="'+s+'">';}).join(''); }); }
 function lookup(){
   var f=$('from').value.trim(), t=$('to').value.trim();
   if(!f||!t){$('fareres').textContent='';return;}
-  apiGet('lookupFare',{from:f,to:t}).then(function(r){
+  liffGet('/api/liff/fare',{from:f,to:t}).then(function(r){
     if(r.found){FOUND=r.oneway;$('oneway').style.display='none';$('fareres').innerHTML='区間「'+f+'⇄'+t+'」 片道¥'+r.oneway.toLocaleString()+' → <b style="color:#d6336c">往復 ¥'+(r.oneway*2).toLocaleString()+' / 日</b>';}
     else{FOUND=null;$('oneway').style.display='block';$('fareres').textContent='この区間は未登録です。片道運賃を入力してください（自動で往復計算）。';}
   });
@@ -36,7 +36,7 @@ function save(){
   var ow = (FOUND!=null)? FOUND : parseInt($('oneway').value||'0',10);
   if(!ow){toast('片道運賃を入力してください');return;}
   spin(true);
-  apiPost({action:'saveTransit',userId:ME.userId,from:f,to:t,oneway:ow}).then(function(r){
+  liffPost('/api/liff/transit',{userId:ME.userId,stationFrom:f,stationTo:t,transportFee:ow*2}).then(function(r){
     spin(false);
     if(r.ok){toast('✅ 登録しました（往復¥'+(ow*2).toLocaleString()+'/日）');showCur({from:f,to:t,round:ow*2});setTimeout(closeWin,1500);}
     else toast(r.message||'登録できませんでした（未登録の場合はBotで氏名を登録）');
@@ -47,9 +47,9 @@ $('from').addEventListener('blur',lookup);$('to').addEventListener('blur',lookup
 loadStations();
 initLiff().then(function(){
   spin(true);
-  apiGet('profile',{userId:ME.userId}).then(function(r){
+  liffGet('/api/liff/me',{userId:ME.userId}).then(function(r){
     spin(false);
-    if(r.ok){showCur(r.transit||{});if(r.transit&&r.transit.from)$('from').value=r.transit.from;if(r.transit&&r.transit.to)$('to').value=r.transit.to;}
+    if(r.ok){var t={from:r.stationFrom||'',to:r.stationTo||'',round:r.transportFee||0};showCur(t);if(t.from)$('from').value=t.from;if(t.to)$('to').value=t.to;}
     else $('cur').innerHTML='未登録です。先にLINEトークで「名前 ○○○○」を送って登録してください。';
   }).catch(function(){spin(false);});
 });

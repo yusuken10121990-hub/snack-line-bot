@@ -17,7 +17,7 @@ var WD=['日','月','火','水','木','金','土'];
 function setMonth(o){OFFSET=o;$('t0').classList.toggle('on',o===0);$('t1').classList.toggle('on',o===1);load();}
 function load(){
   var c=monthOf(OFFSET);spin(true);
-  apiGet('getConfirmedShift',{userId:ME.userId,ym:c.ym}).then(function(r){
+  liffGet('/api/liff/fixed',{userId:ME.userId,year:c.y,month:c.m}).then(function(r){
     spin(false);
     var fx=(r.fixes||[]);
     $('summary').innerHTML='<b>'+c.y+'年'+c.m+'月</b>　確定 <b style="color:#d6336c">'+fx.length+'</b> 日';

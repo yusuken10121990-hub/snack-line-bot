@@ -30,8 +30,8 @@ function timeOpts(){var a=[];for(var h=18;h<=29;h++){var hh=h>=24?h-24:h;a.push(
 function fillTimes(){var o=timeOpts();$('tf').innerHTML=o.map(function(t){return '<option'+(t==='20:00'?' selected':'')+'>'+t+'</option>';}).join('');$('tt').innerHTML=o.map(function(t){return '<option'+(t==='02:00'?' selected':'')+'>'+t+'</option>';}).join('');}
 function load(){
   CUR=monthOf(OFFSET);$('mlabel').textContent=CUR.y+'年'+CUR.m+'月';SH={};spin(true);
-  apiGet('getShiftRequest',{userId:ME.userId,ym:CUR.ym}).then(function(r){
-    (r.requests||[]).forEach(function(q){SH[q.date]={opt:q.opt,from:q.from,to:q.to};});
+  liffGet('/api/liff/myshift',{userId:ME.userId,year:CUR.y,month:CUR.m}).then(function(r){
+    (r.rows||[]).forEach(function(q){SH[toLocalKey(q.date)]={opt:q.option,from:q.timeFrom,to:q.timeTo};});
     render();spin(false);
   }).catch(function(){spin(false);render();});
 }
@@ -59,10 +59,10 @@ function pick(opt){
   closeModal();render();
 }
 function submit(){
-  var reqs=Object.keys(SH).map(function(k){return {date:k,opt:SH[k].opt,from:SH[k].from||'',to:SH[k].to||''};});
+  var reqs=Object.keys(SH).map(function(k){return {date:toApiDate(k),option:SH[k].opt,timeFrom:SH[k].from||'',timeTo:SH[k].to||''};});
   if(!reqs.length){toast('1日以上選択してください');return;}
   spin(true);
-  apiPost({action:'submitShift',userId:ME.userId,ym:CUR.ym,requests:reqs}).then(function(r){
+  liffPost('/api/liff/shift',{userId:ME.userId,year:CUR.y,month:CUR.m,requests:reqs}).then(function(r){
     spin(false);
     if(r.ok){toast('✅ '+(r.message||'提出しました'));setTimeout(closeWin,1500);}
     else toast(r.message||'提出できませんでした（未登録の場合はBotで氏名を登録）');
