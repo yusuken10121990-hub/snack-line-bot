@@ -2,7 +2,7 @@
 var LIFF_ID = '2010418983-tAsscHwB';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbzOLuWAbU1Td4VMCVGEK2nWRZ4WpUFGMLBvplH1aPaZx0sdF60u1o3G1aKOW02nLd07jg/exec';
 
-var ME = { userId: '', displayName: '' };
+var ME = { userId: '', displayName: '', idToken: '' };
 
 function $(id) { return document.getElementById(id); }
 function spin(on) { var s = $('spin'); if (s) s.classList.toggle('on', !!on); }
@@ -17,7 +17,11 @@ function initLiff() {
       if (typeof liff === 'undefined') return fallback();
       liff.init({ liffId: LIFF_ID }).then(function () {
         if (!liff.isLoggedIn()) { liff.login(); return; }
-        liff.getProfile().then(function (p) { ME.userId = p.userId; ME.displayName = p.displayName; resolve(ME); }).catch(fallback);
+        liff.getProfile().then(function (p) {
+          ME.userId = p.userId; ME.displayName = p.displayName;
+          try { ME.idToken = liff.getIDToken() || ''; } catch (e2) { ME.idToken = ''; } // サーバ側でLINEに照会し検証する(自己申告のuserIdは信用させない)
+          resolve(ME);
+        }).catch(fallback);
       }).catch(fallback);
     } catch (e) { fallback(); }
   });
@@ -39,12 +43,17 @@ function monthOf(offset) { var d = new Date(); d.setDate(1); d.setMonth(d.getMon
 
 /* ====== 新システム(snack-korekara-web) API: shift/transit/confirm/index が使用 ====== */
 var API_BASE = 'https://snack-web-production.up.railway.app';
+function authHeaders_(extra) {
+  var h = extra || {};
+  if (ME.idToken) h['Authorization'] = 'Bearer ' + ME.idToken;
+  return h;
+}
 function liffGet(path, params) {
   var qs = Object.keys(params || {}).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-  return fetch(API_BASE + path + (qs ? ('?' + qs) : '')).then(function (r) { return r.json(); });
+  return fetch(API_BASE + path + (qs ? ('?' + qs) : ''), { headers: authHeaders_() }).then(function (r) { return r.json(); });
 }
 function liffPost(path, obj) {
-  return fetch(API_BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) }).then(function (r) { return r.json(); });
+  return fetch(API_BASE + path, { method: 'POST', headers: authHeaders_({ 'Content-Type': 'application/json' }), body: JSON.stringify(obj) }).then(function (r) { return r.json(); });
 }
 /* 日付キー変換: 画面内部キー(Y/M/D, ゼロ埋め無し) <-> API日付(YYYY-MM-DD) */
 function pad2_(n) { return ('0' + n).slice(-2); }
