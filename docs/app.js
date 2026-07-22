@@ -48,12 +48,21 @@ function authHeaders_(extra) {
   if (ME.idToken) h['Authorization'] = 'Bearer ' + ME.idToken;
   return h;
 }
+/* b62: 通信エラー時にステータス/理由をconsoleへ残す(以前は握りつぶされ「通信エラー」としか分からなかった)。
+   画面側の.catch()の挙動(トースト表示等)は変えず、原因追跡だけできるようにする。 */
+function logApiError_(path, err) { try { console.error('[api] ' + path + ' failed:', err && err.message ? err.message : err); } catch (e) {} }
 function liffGet(path, params) {
   var qs = Object.keys(params || {}).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-  return fetch(API_BASE + path + (qs ? ('?' + qs) : ''), { headers: authHeaders_() }).then(function (r) { return r.json(); });
+  return fetch(API_BASE + path + (qs ? ('?' + qs) : ''), { headers: authHeaders_() }).then(function (r) {
+    if (!r.ok) console.error('[api] ' + path + ' HTTP ' + r.status);
+    return r.json();
+  }).catch(function (e) { logApiError_(path, e); throw e; });
 }
 function liffPost(path, obj) {
-  return fetch(API_BASE + path, { method: 'POST', headers: authHeaders_({ 'Content-Type': 'application/json' }), body: JSON.stringify(obj) }).then(function (r) { return r.json(); });
+  return fetch(API_BASE + path, { method: 'POST', headers: authHeaders_({ 'Content-Type': 'application/json' }), body: JSON.stringify(obj) }).then(function (r) {
+    if (!r.ok) console.error('[api] ' + path + ' HTTP ' + r.status);
+    return r.json();
+  }).catch(function (e) { logApiError_(path, e); throw e; });
 }
 /* 日付キー変換: 画面内部キー(Y/M/D, ゼロ埋め無し) <-> API日付(YYYY-MM-DD) */
 function pad2_(n) { return ('0' + n).slice(-2); }
